@@ -52,7 +52,13 @@ jobs:
         run: |
           echo "1. Finding and copying freshly compiled C++ static libraries..."
           mkdir -p Mindustry/ios/libs
-          find Arc/natives -name "*.a" -exec cp {} Mindustry/ios/libs/ \;
+          
+          # Scan the entire Arc directory to ensure we catch the output files
+          find Arc -type f -name "libarc.a" -exec cp {} Mindustry/ios/libs/libarc.a \;
+          find Arc -type f -name "libarc-freetype.a" -exec cp {} Mindustry/ios/libs/libarc-freetype.a \;
+          
+          echo "Verifying copied natives:"
+          ls -la Mindustry/ios/libs/
           
           echo "2. Downloading and extracting MetalANGLEKit..."
           mkdir -p Mindustry/ios/frameworks
