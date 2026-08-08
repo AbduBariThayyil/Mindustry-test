@@ -58,6 +58,10 @@ jobs:
       - name: Patch iOS Build Script
         working-directory: Mindustry
         run: |
+          echo "Removing false dynamic framework 'arc' from build.gradle..."
+          sed -i '' "s/\"arc\"//g" ios/build.gradle
+          sed -i '' "s/'arc'//g" ios/build.gradle
+          
           echo "Allowing unsigned builds..."
           sed -i '' 's/iosSkipSigning = false/iosSkipSigning = true/' ios/build.gradle
           
