@@ -46,7 +46,7 @@ jobs:
           echo "Compiling C++ engine core..."
           cd Arc
           chmod +x ./gradlew
-          ./gradlew jnigen jnigenBuildIOS --info
+          ./gradlew jnigen jnigenBuildAllIOS --info
           
           echo "Locating built static libraries..."
           CORE_A=$(find arc-core/libs -name "*.a" | head -n 1)
