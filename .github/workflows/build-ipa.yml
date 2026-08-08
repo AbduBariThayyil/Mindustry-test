@@ -42,17 +42,12 @@ jobs:
 
       - name: Inject Arc Natives & MetalANGLEKit
         run: |
-          echo "1. Fetching precompiled Arc static libraries directly into target folders..."
-          mkdir -p Mindustry/ios/libs
+          echo "1. Fetching precompiled Arc static libraries natively into Arc structure..."
           mkdir -p Arc/natives/natives-ios/libs
           mkdir -p Arc/natives/natives-freetype-ios/libs
           
-          curl -L -o Mindustry/ios/libs/libarc.a https://github.com/Anuken/Arc/raw/master/natives/natives-ios/libs/libarc.a
-          curl -L -o Mindustry/ios/libs/libarc-freetype.a https://github.com/Anuken/Arc/raw/master/natives/natives-freetype-ios/libs/libarc-freetype.a
-          
-          # Copy to Arc folder as a failsafe for the pack task
-          cp Mindustry/ios/libs/*.a Arc/natives/natives-ios/libs/ 2>/dev/null || true
-          cp Mindustry/ios/libs/*.a Arc/natives/natives-freetype-ios/libs/ 2>/dev/null || true
+          curl -L -o Arc/natives/natives-ios/libs/libarc.a https://github.com/Anuken/Arc/raw/master/natives/natives-ios/libs/libarc.a
+          curl -L -o Arc/natives/natives-freetype-ios/libs/libarc-freetype.a https://github.com/Anuken/Arc/raw/master/natives/natives-freetype-ios/libs/libarc-freetype.a
           
           echo "2. Downloading and extracting MetalANGLEKit..."
           mkdir -p Mindustry/ios/frameworks
