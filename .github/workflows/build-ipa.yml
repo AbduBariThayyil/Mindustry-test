@@ -46,26 +46,32 @@ jobs:
           echo "Compiling C++ engine core..."
           cd Arc
           chmod +x ./gradlew
-          ./gradlew jnigen jnigenBuildAllIOS
+          ./gradlew jnigen jnigenBuildIOS --info
+          
+          echo "Locating built static libraries..."
+          CORE_A=$(find arc-core/libs -name "*.a" | head -n 1)
+          
+          if [ -z "$CORE_A" ]; then
+            echo "CRITICAL ERROR: Core libarc.a not found! Compilation failed silently."
+            exit 1
+          fi
+          
+          echo "Found natives! Seeding Arc output directories for Mindustry's native copy task..."
+          mkdir -p arc-core/libs/ios64
+          mkdir -p extensions/freetype/libs/ios64
+          
+          # Force copy whatever was built into the ios64 directories so Mindustry can natively grab them
+          find arc-core/libs -name "*.a" -exec cp {} arc-core/libs/ios64/libarc.a \;
+          find extensions/freetype/libs -name "*.a" -exec cp {} extensions/freetype/libs/ios64/libarc-freetype.a \;
 
-      - name: Move Natives & Inject MetalANGLEKit
+      - name: Download MetalANGLEKit & Prepare Mindustry
         run: |
-          echo "1. Finding and copying freshly compiled C++ static libraries..."
-          mkdir -p Mindustry/ios/libs
-          
-          # Scan the entire Arc directory to ensure we catch the output files
-          find Arc -type f -name "libarc.a" -exec cp {} Mindustry/ios/libs/libarc.a \;
-          find Arc -type f -name "libarc-freetype.a" -exec cp {} Mindustry/ios/libs/libarc-freetype.a \;
-          
-          echo "Verifying copied natives:"
-          ls -la Mindustry/ios/libs/
-          
-          echo "2. Downloading and extracting MetalANGLEKit..."
+          echo "Downloading and extracting MetalANGLEKit..."
           mkdir -p Mindustry/ios/frameworks
           curl -L -o metal.zip https://github.com/libgdx/MetalANGLEKit/releases/download/v1.2.1/metalanglekit.zip
           unzip -q -o metal.zip -d Mindustry/ios/frameworks/
           
-          echo "3. Linking framework path safely in robovm.xml..."
+          echo "Linking framework path safely in robovm.xml..."
           awk '/<\/config>/{print "  <frameworkPaths>\n    <path>frameworks</path>\n  </frameworkPaths>\n</config>"; next}1' Mindustry/ios/robovm.xml > tmp.xml && mv tmp.xml Mindustry/ios/robovm.xml
 
       - name: Patch iOS Build Script (Surgical)
