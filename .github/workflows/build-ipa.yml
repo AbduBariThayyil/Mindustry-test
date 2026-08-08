@@ -43,26 +43,39 @@ jobs:
           echo "Installing Mac compilation tools..."
           brew install ant autoconf automake libtool pkg-config
           
-          echo "Compiling C++ engine core..."
+          echo "Compiling C++ engine core (ignoring 32-bit failures)..."
           cd Arc
           chmod +x ./gradlew
-          ./gradlew jnigen jnigenBuildAllIOS --info
           
-          echo "Locating built static libraries..."
-          CORE_A=$(find arc-core/libs -name "*.a" | head -n 1)
+          # Run the build but catch the error when Xcode inevitably refuses to build 32-bit
+          ./gradlew jnigen jnigenBuildAllIOS || echo "Ignored expected compilation error on 32-bit iOS."
           
-          if [ -z "$CORE_A" ]; then
-            echo "CRITICAL ERROR: Core libarc.a not found! Compilation failed silently."
+          echo "Locating built 64-bit static libraries..."
+          mkdir -p arc-core/libs/ios64 arc-core/libs/ios32
+          mkdir -p extensions/freetype/libs/ios64 extensions/freetype/libs/ios32
+          
+          # Strictly find the 64-bit libraries
+          CORE_A=$(find . -path "*/ios64/*" -name "libarc.a" | head -n 1)
+          if [ -n "$CORE_A" ]; then
+            echo "Rescuing 64-bit core: $CORE_A"
+            cp "$CORE_A" arc-core/libs/ios64/libarc.a
+          else
+            echo "CRITICAL ERROR: Core libarc.a not found!"
             exit 1
           fi
           
-          echo "Found natives! Seeding Arc output directories for Mindustry's native copy task..."
-          mkdir -p arc-core/libs/ios64
-          mkdir -p extensions/freetype/libs/ios64
+          FREE_A=$(find . -path "*/ios64/*" -name "libarc-freetype.a" | head -n 1)
+          if [ -n "$FREE_A" ]; then
+            echo "Rescuing 64-bit freetype: $FREE_A"
+            cp "$FREE_A" extensions/freetype/libs/ios64/libarc-freetype.a
+          else
+            echo "CRITICAL ERROR: Freetype libarc-freetype.a not found!"
+            exit 1
+          fi
           
-          # Force copy whatever was built into the ios64 directories so Mindustry can natively grab them
-          find arc-core/libs -name "*.a" -exec cp {} arc-core/libs/ios64/libarc.a \;
-          find extensions/freetype/libs -name "*.a" -exec cp {} extensions/freetype/libs/ios64/libarc-freetype.a \;
+          echo "Creating dummy 32-bit files to satisfy Mindustry copyNatives task..."
+          touch arc-core/libs/ios32/libarc.a
+          touch extensions/freetype/libs/ios32/libarc-freetype.a
 
       - name: Download MetalANGLEKit & Prepare Mindustry
         run: |
@@ -76,17 +89,16 @@ jobs:
 
       - name: Patch iOS Build Script (Surgical)
         run: |
-          echo "Hunting down and destroying fake <framework>arc</framework> in all XMLs..."
+          echo "Removing fake arc framework..."
           find . -name "robovm.xml" -type f -exec sed -i '' '/<framework>arc<\/framework>/d' {} +
           
-          echo "Removing string framework references from build.gradle..."
           find . -name "build.gradle" -type f -exec sed -i '' "s/'arc', //g" {} +
           find . -name "build.gradle" -type f -exec sed -i '' "s/, 'arc'//g" {} +
           find . -name "build.gradle" -type f -exec sed -i '' "s/\"arc\", //g" {} +
           find . -name "build.gradle" -type f -exec sed -i '' "s/, \"arc\"//g" {} +
           
-          echo "Explicitly loading the compiled real C++ natives into RoboVM..."
-          sed -i '' 's|<lib>z</lib>|<lib>z</lib><lib>libs/libarc.a</lib><lib>libs/libarc-freetype.a</lib>|g' Mindustry/ios/robovm.xml
+          echo "Explicitly loading the compiled 64-bit C++ natives into RoboVM..."
+          sed -i '' 's|<lib>z</lib>|<lib>z</lib><lib>libs/ios64/libarc.a</lib><lib>libs/ios64/libarc-freetype.a</lib>|g' Mindustry/ios/robovm.xml
           
           echo "Allowing unsigned builds..."
           sed -i '' 's/iosSkipSigning = false/iosSkipSigning = true/' Mindustry/ios/build.gradle
