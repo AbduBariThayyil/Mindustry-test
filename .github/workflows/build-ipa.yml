@@ -40,14 +40,12 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Inject Arc Natives & MetalANGLEKit
+      - name: Inject Natives, Frameworks & Fix Gradle Duplicates
         run: |
-          echo "1. Fetching precompiled Arc static libraries natively into Arc structure..."
-          mkdir -p Arc/natives/natives-ios/libs
-          mkdir -p Arc/natives/natives-freetype-ios/libs
-          
-          curl -L -o Arc/natives/natives-ios/libs/libarc.a https://github.com/Anuken/Arc/raw/master/natives/natives-ios/libs/libarc.a
-          curl -L -o Arc/natives/natives-freetype-ios/libs/libarc-freetype.a https://github.com/Anuken/Arc/raw/master/natives/natives-freetype-ios/libs/libarc-freetype.a
+          echo "1. Fetching precompiled Arc static libraries..."
+          mkdir -p Mindustry/ios/libs
+          curl -L -o Mindustry/ios/libs/libarc.a https://github.com/Anuken/Arc/raw/master/natives/natives-ios/libs/libarc.a
+          curl -L -o Mindustry/ios/libs/libarc-freetype.a https://github.com/Anuken/Arc/raw/master/natives/natives-freetype-ios/libs/libarc-freetype.a
           
           echo "2. Downloading and extracting MetalANGLEKit..."
           mkdir -p Mindustry/ios/frameworks
@@ -60,12 +58,11 @@ jobs:
       - name: Patch iOS Build Script
         working-directory: Mindustry
         run: |
-          echo "Removing false dynamic framework 'arc' from build.gradle..."
-          sed -i '' "s/\"arc\"//g" ios/build.gradle
-          sed -i '' "s/'arc'//g" ios/build.gradle
-          
           echo "Allowing unsigned builds..."
           sed -i '' 's/iosSkipSigning = false/iosSkipSigning = true/' ios/build.gradle
+          
+          echo "Bypassing Gradle 9 duplicate copy crash..."
+          echo "tasks.withType(Copy).configureEach { duplicatesStrategy = DuplicatesStrategy.INCLUDE }" >> ios/build.gradle
 
       - name: Build the IPA
         working-directory: Mindustry
