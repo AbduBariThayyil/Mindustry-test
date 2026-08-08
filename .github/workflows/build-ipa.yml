@@ -26,7 +26,7 @@ jobs:
           echo "full sha: $full"
           echo "hash=$full" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout matching Arc (must sit next to Mindustry)
+      - name: Checkout matching Arc
         uses: actions/checkout@v4
         with:
           repository: Anuken/Arc
@@ -40,7 +40,7 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Inject Natives, Frameworks & Fix Gradle Duplicates
+      - name: Inject Natives & MetalANGLEKit
         run: |
           echo "1. Fetching precompiled Arc static libraries..."
           mkdir -p Mindustry/ios/libs
@@ -53,20 +53,25 @@ jobs:
           unzip -q -o metal.zip -d Mindustry/ios/frameworks/
           
           echo "3. Linking framework path safely in robovm.xml..."
-          awk '/<\/config>/{print "  <frameworkPaths>\n    <path>frameworks</path>\n  </frameworkPaths>"}1' Mindustry/ios/robovm.xml > tmp.xml && mv tmp.xml Mindustry/ios/robovm.xml
+          awk '/<\/config>/{print "  <frameworkPaths>\n    <path>frameworks</path>\n  </frameworkPaths>\n</config>"}1' Mindustry/ios/robovm.xml > tmp.xml && mv tmp.xml Mindustry/ios/robovm.xml
+          
+          echo "4. Explicitly force-loading libarc.a to bypass RoboVM auto-linker..."
+          awk '/<\/config>/{print "  <extraLinkerArgs>\n    <arg>-force_load</arg>\n    <arg>libs/libarc.a</arg>\n  </extraLinkerArgs>\n</config>"}1' Mindustry/ios/robovm.xml > tmp.xml && mv tmp.xml Mindustry/ios/robovm.xml
 
-      - name: Patch iOS Build Script
-        working-directory: Mindustry
+      - name: Global iOS Build Patch (Purge Arc Framework)
         run: |
-          echo "Removing false dynamic framework 'arc' from build.gradle..."
-          sed -i '' "s/\"arc\"//g" ios/build.gradle
-          sed -i '' "s/'arc'//g" ios/build.gradle
+          echo "Hunting down and destroying <framework>arc</framework> in all XMLs..."
+          find . -name "robovm.xml" -type f -exec sed -i '' '/<framework>arc<\/framework>/d' {} +
+          
+          echo "Removing string framework references from build.gradle..."
+          find . -name "build.gradle" -type f -exec sed -i '' "s/'arc'//g" {} +
+          find . -name "build.gradle" -type f -exec sed -i '' 's/"arc"//g' {} +
           
           echo "Allowing unsigned builds..."
-          sed -i '' 's/iosSkipSigning = false/iosSkipSigning = true/' ios/build.gradle
+          sed -i '' 's/iosSkipSigning = false/iosSkipSigning = true/' Mindustry/ios/build.gradle
           
           echo "Bypassing Gradle 9 duplicate copy crash..."
-          echo "tasks.withType(Copy).configureEach { duplicatesStrategy = DuplicatesStrategy.INCLUDE }" >> ios/build.gradle
+          echo "tasks.withType(Copy).configureEach { duplicatesStrategy = DuplicatesStrategy.INCLUDE }" >> Mindustry/ios/build.gradle
 
       - name: Build the IPA
         working-directory: Mindustry
