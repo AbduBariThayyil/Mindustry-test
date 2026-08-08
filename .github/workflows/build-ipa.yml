@@ -38,30 +38,48 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Fetch Frameworks & Natives
+      - name: Install C++ Tools & Compile Arc Natives
         run: |
-          mkdir -p Mindustry/ios/libs
-          curl -L -o Mindustry/ios/libs/libarc.a https://github.com/Anuken/Arc/raw/master/natives/natives-ios/libs/libarc.a
-          curl -L -o Mindustry/ios/libs/libarc-freetype.a https://github.com/Anuken/Arc/raw/master/natives/natives-freetype-ios/libs/libarc-freetype.a
+          echo "Installing Mac compilation tools..."
+          brew install ant autoconf automake libtool pkg-config
           
+          echo "Compiling C++ engine core..."
+          cd Arc
+          chmod +x ./gradlew
+          ./gradlew jnigen jnigenBuildAllIOS
+
+      - name: Move Natives & Inject MetalANGLEKit
+        run: |
+          echo "1. Finding and copying freshly compiled C++ static libraries..."
+          mkdir -p Mindustry/ios/libs
+          find Arc/natives -name "*.a" -exec cp {} Mindustry/ios/libs/ \;
+          
+          echo "2. Downloading and extracting MetalANGLEKit..."
           mkdir -p Mindustry/ios/frameworks
           curl -L -o metal.zip https://github.com/libgdx/MetalANGLEKit/releases/download/v1.2.1/metalanglekit.zip
           unzip -q -o metal.zip -d Mindustry/ios/frameworks/
           
+          echo "3. Linking framework path safely in robovm.xml..."
           awk '/<\/config>/{print "  <frameworkPaths>\n    <path>frameworks</path>\n  </frameworkPaths>\n</config>"; next}1' Mindustry/ios/robovm.xml > tmp.xml && mv tmp.xml Mindustry/ios/robovm.xml
 
-      - name: Patch iOS Build Scripts (Surgical)
+      - name: Patch iOS Build Script (Surgical)
         run: |
+          echo "Hunting down and destroying fake <framework>arc</framework> in all XMLs..."
           find . -name "robovm.xml" -type f -exec sed -i '' '/<framework>arc<\/framework>/d' {} +
           
+          echo "Removing string framework references from build.gradle..."
           find . -name "build.gradle" -type f -exec sed -i '' "s/'arc', //g" {} +
           find . -name "build.gradle" -type f -exec sed -i '' "s/, 'arc'//g" {} +
           find . -name "build.gradle" -type f -exec sed -i '' "s/\"arc\", //g" {} +
           find . -name "build.gradle" -type f -exec sed -i '' "s/, \"arc\"//g" {} +
           
+          echo "Explicitly loading the compiled real C++ natives into RoboVM..."
           sed -i '' 's|<lib>z</lib>|<lib>z</lib><lib>libs/libarc.a</lib><lib>libs/libarc-freetype.a</lib>|g' Mindustry/ios/robovm.xml
           
+          echo "Allowing unsigned builds..."
           sed -i '' 's/iosSkipSigning = false/iosSkipSigning = true/' Mindustry/ios/build.gradle
+          
+          echo "Bypassing Gradle 9 duplicate copy crash..."
           echo "tasks.withType(Copy).configureEach { duplicatesStrategy = DuplicatesStrategy.INCLUDE }" >> Mindustry/ios/build.gradle
 
       - name: Build the IPA
