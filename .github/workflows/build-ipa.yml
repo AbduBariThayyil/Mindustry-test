@@ -1,0 +1,61 @@
+name: Build Mindustry iOS IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout Mindustry v159.7
+        uses: actions/checkout@v4
+        with:
+          repository: Anuken/Mindustry
+          ref: v159.7
+          path: Mindustry
+
+      - name: Resolve the Arc commit Mindustry was built against
+        id: arc
+        run: |
+          echo "hash=208a754044" >> $GITHUB_OUTPUT
+
+      - name: Checkout matching Arc
+        uses: actions/checkout@v4
+        with:
+          repository: Anuken/Arc
+          ref: ${{ steps.arc.outputs.hash }}
+          path: Arc
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Inject MetalANGLE Framework & Setup Native Paths
+        run: |
+          echo "1. Downloading MetalANGLEKit for iOS graphics..."
+          curl -L -o metal.zip https://github.com/libgdx/MetalANGLEKit/releases/download/v1.2.1/metalanglekit.zip
+          mkdir -p Mindustry/ios/frameworks
+          unzip -q -o metal.zip -d Mindustry/ios/frameworks/
+
+          echo "2. Ensuring native library structures exist..."
+          mkdir -p Mindustry/ios/libs
+
+      - name: Allow an unsigned build
+        working-directory: Mindustry
+        run: sed -i '' 's/iosSkipSigning = false/iosSkipSigning = true/' ios/build.gradle
+
+      - name: Build the IPA
+        working-directory: Mindustry
+        run: |
+          chmod +x ./gradlew
+          ./gradlew pack
+          ./gradlew ios:createIPA --stacktrace
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mindustry-159.7-ios
+          path: Mindustry/ios/build/robovm/*.ipa
